@@ -1,10 +1,14 @@
 package com.fernandez.fixtures.service;
 
+import org.bson.types.ObjectId;
+import org.apache.commons.io.IOUtils;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStreamReader;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -15,14 +19,16 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
 import com.fernandez.fixtures.dao.FixturesDAO;
+import com.fernandez.fixtures.dao.results.*;
 import com.fernandez.fixtures.output.ResultsIds;
 import com.fernandez.fixtures.repository.FixturesRepository;
+import com.fernandez.fixtures.repository.ResultsIdsRepository;
 import com.fernandez.fixtures.repository.ResultsRepository;
+import com.fernandez.fixtures.utils.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.regex.Matcher;
@@ -36,7 +42,10 @@ public class NpmStartService {
     private FixturesRepository fixturesRepository;
 
     @Autowired
-    private ResultsRepository resultsRepository;
+    private ResultsRepository resultRepository;
+
+    @Autowired
+    private ResultsIdsRepository resultsRepository;
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -256,4 +265,115 @@ public class NpmStartService {
         // Emite un evento después de guardar el documento
         return resultsIds;
     }
+
+    public void runNpmStartWithIdResults(String spain, String acb, String results, String s, Object o) {
+        String command = String.format("npm run start country=%s league=%s action=%s ids=%s includeMatchData=true includeStatsPlayer=false includeStatsMatch=false includePointByPoint=false headless",
+                spain, acb, results, s);
+
+        // Define a regular expression to match the content between single quotes
+        Pattern pattern = Pattern.compile("'(.*?)'");
+
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", command)
+                    .directory(new File("C:\\Proyectos\\FlashscoreScraping"))
+                    .redirectErrorStream(true);
+
+            Process process = processBuilder.start();
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+                String[] lines = output.split("\\r?\\n");
+                List<String> stringList = new ArrayList<>();
+                for (int i = 12; i < lines.length; i++) {
+                    stringList.add(lines[i]);
+                }
+
+                ResultsDAO resultsDAO = getResultsDAO(spain, acb, pattern, stringList);
+                System.out.println(resultsDAO);
+                    resultRepository.save(resultsDAO);
+            }
+
+            int exitCode = process.waitFor();
+            logger.info("npm start execution completed with exit code: {}", exitCode);
+
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error running npm start", e);
+        }
+    }
+
+    private static ResultsDAO getResultsDAO(String spain, String acb, Pattern pattern, List<String> stringList) {
+        ResultsDAO resultsDAO = new ResultsDAO();
+        // Find the index of the first underscore after "g_3"
+        String id = stringList.get(0);
+        String resultId = id.split(" ")[1];
+        resultsDAO.setMatchId(resultId);
+        MatchDataDAO matchDataDAO = new MatchDataDAO();
+        ResultDAO resultDAO = new ResultDAO();
+        resultDAO.setHome(extracted(stringList, pattern,12));
+        resultDAO.setAway(extracted(stringList, pattern,18));
+        matchDataDAO.setResult(resultDAO);
+        TeamDAO teamDAO = new TeamDAO();
+        teamDAO.setName(extracted(stringList, pattern,4));
+        try {
+            byte[] imageId = uploadImageFromUrl(extracted(stringList, pattern,5));
+            teamDAO.setImage(imageId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        TeamDAO teamAway = new TeamDAO();
+        teamAway.setName(extracted(stringList, pattern,8));
+        try {
+            byte[] imageId = uploadImageFromUrl(extracted(stringList, pattern,9));
+            teamAway.setImage(imageId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        matchDataDAO.setHome(teamDAO);
+        matchDataDAO.setAway(teamAway);
+        matchDataDAO.setDate(DateUtils.convertStringToInstant(extracted(stringList, pattern,2)));
+        resultsDAO.setMatchData(matchDataDAO);
+        matchDataDAO.setTotalLocal(extracted(stringList, pattern,12));
+        matchDataDAO.setFirstLocal(extracted(stringList, pattern,13));
+        matchDataDAO.setSecondLocal(extracted(stringList, pattern,14));
+        matchDataDAO.setThirstLocal(extracted(stringList, pattern,15));
+        matchDataDAO.setFourthLocal(extracted(stringList, pattern,16));
+        matchDataDAO.setExtraLocal(extracted(stringList, pattern,17));
+        matchDataDAO.setTotalAway(extracted(stringList, pattern,18));
+        matchDataDAO.setFirstAway(extracted(stringList, pattern,19));
+        matchDataDAO.setSecondAway(extracted(stringList, pattern,20));
+        matchDataDAO.setThirstAway(extracted(stringList, pattern,21));
+        matchDataDAO.setFourthAway(extracted(stringList, pattern,22));
+        matchDataDAO.setExtraAway(extracted(stringList, pattern,23));
+        resultsDAO.setCountry(spain);
+        resultsDAO.setLeague(acb);
+        return resultsDAO;
+    }
+
+    private static String extracted(List<String> stringList, Pattern pattern,int id) {
+        Matcher matcher = pattern.matcher(stringList.get(id));
+        String extractedValue = new String();
+        if (matcher.find()) {
+            // Extract and print the content between single quotes
+            extractedValue = matcher.group(1);
+        } else {
+            System.out.println("No match found.");
+        }
+        return extractedValue;
+    }
+
+    public static byte[] uploadImageFromUrl(String imageUrl) throws IOException {
+        // Descarga la imagen desde la URL
+        byte[] imageBytes = downloadImage(imageUrl);
+
+        // Guarda la imagen en MongoDB y devuelve el ObjectId generado
+        return imageBytes;
+    }
+
+    private static byte[] downloadImage(String imageUrl) throws IOException {
+        try (InputStream inputStream = new URL(imageUrl).openStream()) {
+            return IOUtils.toByteArray(inputStream);
+        }
+    }
+
 }

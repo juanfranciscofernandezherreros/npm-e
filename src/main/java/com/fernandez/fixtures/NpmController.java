@@ -1,6 +1,7 @@
 package com.fernandez.fixtures;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fernandez.fixtures.dto.ResultsDTO;
 import com.fernandez.fixtures.dto.Root;
 import com.fernandez.fixtures.service.NpmStartService;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,22 @@ public class NpmController {
         // Esperar a que todas las CompletableFuture se completen sin bloquear el hilo principal
         allOf.join();
     }
+
+    @PostMapping("/strings")
+    public void processStrings(@RequestBody ResultsDTO resultsDTO) {
+        log.info("Received strings: {}", resultsDTO);
+            // Realizar alguna operación con cada ResultsDTO
+            String country = resultsDTO.getCountry();
+            String league = resultsDTO.getLeague();
+            String action = resultsDTO.getAction();
+            List<String> ids = resultsDTO.getIds();
+            for (String id : ids){
+                // Llamar al servicio con los datos necesarios
+                npmStartService.runNpmStartWithIdResults(country, league, action, id, null);
+            }
+
+    }
+
 }
 
 
