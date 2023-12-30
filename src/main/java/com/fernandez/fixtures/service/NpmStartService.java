@@ -266,7 +266,7 @@ public class NpmStartService {
         return resultsIds;
     }
 
-    public void runNpmStartWithIdResults(String spain, String acb, String results, String s, Object o) {
+    public void runNpmStartWithIdResults(String spain, String acb, String results, String s) {
         String command = String.format("npm run start country=%s league=%s action=%s ids=%s includeMatchData=true includeStatsPlayer=false includeStatsMatch=false includePointByPoint=false headless",
                 spain, acb, results, s);
 
