@@ -7,18 +7,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fernandez.fixtures.dao.results.ResultsDAO;
+import com.fernandez.fixtures.dao.urls.UrlsDAO;
 import com.fernandez.fixtures.dto.ResultsDTO;
 import com.fernandez.fixtures.dto.Root;
+import com.fernandez.fixtures.dto.UrlsDTO;
 import com.fernandez.fixtures.output.ResultsIds;
 import com.fernandez.fixtures.repository.ResultsIdsRepository;
 import com.fernandez.fixtures.repository.ResultsRepository;
 import com.fernandez.fixtures.service.NpmStartService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -86,9 +85,10 @@ public class NpmController {
         log.info("Processing finished for all IDs");
     }
 
-
-
-
+    @GetMapping("/saveAllUrls")
+    public void saveAllUrls(){
+        npmStartService.getFirstUrlWithBooleanFalse();
+    }
 
 
 }

@@ -1,14 +1,14 @@
 package com.fernandez.fixtures.service;
 
-import org.bson.types.ObjectId;
-import org.apache.commons.io.IOUtils;
+import com.fernandez.fixtures.dao.urls.UrlsDAO;
+import com.fernandez.fixtures.repository.UrlsRepository;
+import com.fernandez.fixtures.utils.ImageUtils;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,6 +46,9 @@ public class NpmStartService {
 
     @Autowired
     private ResultsIdsRepository resultsRepository;
+
+    @Autowired
+    private UrlsRepository urlsRepository;
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -315,7 +318,7 @@ public class NpmStartService {
         TeamDAO teamDAO = new TeamDAO();
         teamDAO.setName(extracted(stringList, pattern,4));
         try {
-            byte[] imageId = uploadImageFromUrl(extracted(stringList, pattern,5));
+            byte[] imageId = ImageUtils.uploadImageFromUrl(extracted(stringList, pattern,5));
             teamDAO.setImage(imageId);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -323,7 +326,7 @@ public class NpmStartService {
         TeamDAO teamAway = new TeamDAO();
         teamAway.setName(extracted(stringList, pattern,8));
         try {
-            byte[] imageId = uploadImageFromUrl(extracted(stringList, pattern,9));
+            byte[] imageId = ImageUtils.uploadImageFromUrl(extracted(stringList, pattern,9));
             teamAway.setImage(imageId);
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -362,18 +365,78 @@ public class NpmStartService {
         return extractedValue;
     }
 
-    public static byte[] uploadImageFromUrl(String imageUrl) throws IOException {
-        // Descarga la imagen desde la URL
-        byte[] imageBytes = downloadImage(imageUrl);
+    public List<String> runNpmStartAndExtractUniqueUrls(String url) {
+        String command = String.format("npm run start-urls -- --url %s", url);
+        List<String> uniqueUrls = new ArrayList<>();
 
-        // Guarda la imagen en MongoDB y devuelve el ObjectId generado
-        return imageBytes;
-    }
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", command)
+                    .directory(new File("C:\\Proyectos\\FlashscoreScraping"))
+                    .redirectErrorStream(true);
 
-    private static byte[] downloadImage(String imageUrl) throws IOException {
-        try (InputStream inputStream = new URL(imageUrl).openStream()) {
-            return IOUtils.toByteArray(inputStream);
+            Process process = processBuilder.start();
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+                String[] lines = output.split("\\r?\\n");
+                for (int i = 12; i < lines.length; i++) {
+                    if (lines[i].contains("Enlace extraído que cumple con los criterios")) {
+                        String[] parts = lines[i].split(": ");
+                        if (parts.length == 2) {
+                            String extractedUrl = parts[1].trim();
+                            uniqueUrls.add(extractedUrl);
+                        } else {
+                            System.out.println("No se pudo extraer la URL de la línea: " + lines[i]);
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                logger.error("Error reading npm start output", e);
+            }
+
+            int exitCode = process.waitFor();
+            logger.info("npm start execution completed with exit code: {}", exitCode);
+
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error running npm start", e);
         }
+
+        return uniqueUrls;
     }
 
+    public void getFirstUrlWithBooleanFalse() {
+        System.out.println("EVERY DAY");
+        List<UrlsDAO> allurls = urlsRepository.findAll();
+        List<UrlsDAO> urlsList = urlsRepository.findAllByIsOpenedFalse();
+        for(UrlsDAO urls : urlsList){
+            if(!urls.isOpened()){
+                List<String> stringsUrls = runNpmStartAndExtractUniqueUrls(urls.getUrls());
+                urls.getUrls();
+                urls.setOpened(true);
+                urlsRepository.save(urls);
+                List<String> uniqueUrls = extractUniqueUrls(stringsUrls);
+                // Obtener las URLs que no están en el repository
+                List<UrlsDAO> urlsNotInRepository = uniqueUrls.stream()
+                        .filter(url -> allurls.stream().noneMatch(urlsDAO -> urlsDAO.getUrls().equals(url)))
+                        .map(url -> new UrlsDAO(url)) // Suponiendo que UrlsDAO tiene un constructor que acepta una URL
+                        .collect(Collectors.toList());
+
+                urlsNotInRepository.forEach(System.out::println);
+                urlsRepository.saveAll(urlsNotInRepository);
+            }
+        }
+        getFirstUrlWithBooleanFalse();
+
+    }
+
+    public static List<String> extractUniqueUrls(List<String> inputUrls) {
+        Set<String> uniqueUrls = inputUrls.stream().collect(Collectors.toSet());
+        // If you want to preserve the order, you can use LinkedHashSet
+        // Set<String> uniqueUrls = new LinkedHashSet<>(inputUrls);
+        return uniqueUrls.stream().collect(Collectors.toList());
+    }
+
+    public List<UrlsDAO> findUrlsContainingString(String searchString) {
+        return urlsRepository.findByUrlsRegex(searchString);
+    }
 }
