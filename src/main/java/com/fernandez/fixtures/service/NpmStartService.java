@@ -1,14 +1,17 @@
 package com.fernandez.fixtures.service;
 
+import com.fernandez.fixtures.dao.fixtures.FixturesPKDAO;
 import com.fernandez.fixtures.dao.urls.UrlsDAO;
-import com.fernandez.fixtures.repository.UrlsRepository;
+import com.fernandez.fixtures.output.FixturesIdPKDAO;
+import com.fernandez.fixtures.output.FixturesIds;
+import com.fernandez.fixtures.output.ResultsIdPKDAO;
+import com.fernandez.fixtures.repository.*;
 import com.fernandez.fixtures.utils.ImageUtils;
 
 import java.io.IOException;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
-import java.lang.reflect.Array;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -18,17 +21,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
-import com.fernandez.fixtures.dao.FixturesDAO;
+import com.fernandez.fixtures.dao.fixtures.FixturesDAO;
 import com.fernandez.fixtures.dao.results.*;
 import com.fernandez.fixtures.output.ResultsIds;
-import com.fernandez.fixtures.repository.FixturesRepository;
-import com.fernandez.fixtures.repository.ResultsIdsRepository;
-import com.fernandez.fixtures.repository.ResultsRepository;
 import com.fernandez.fixtures.utils.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.regex.Matcher;
@@ -51,7 +52,7 @@ public class NpmStartService {
     private UrlsRepository urlsRepository;
 
     @Autowired
-    private ApplicationEventPublisher eventPublisher;
+    private FixturesIdRepository fixturesIdRepository;
 
     private final Logger logger = LoggerFactory.getLogger(NpmStartService.class);
 
@@ -65,6 +66,11 @@ public class NpmStartService {
             if(action.equals("fixtures")) {
                     command = String.format("npm run start country=%s league=%s action=%s ids=%s headless",
                             country, league, action, ids);
+            }
+
+            if(action.equals("results")) {
+                command = String.format("npm run start country=%s league=%s action=%s ids=%s headless",
+                        country, league, action, ids);
             }
 
             logger.info("Running npm start with command: {}", command);
@@ -91,8 +97,32 @@ public class NpmStartService {
         String command = new String();
         try {
             if(action.equals("results")){
-                command = String.format("npm run start country=%s league=%s action=%s headless",
-                        country, league, action);
+                if(ids==null) {
+                    command = String.format("npm run start country=%s league=%s action=%s headless",
+                            country, league, action);
+                } else {
+                    command = String.format("npm run start country=%s league=%s action=%s ids=%s headless",
+                            country, league, action, ids);
+                    ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", command)
+                            .directory(new File("C:\\Proyectos\\FlashscoreScraping"));
+
+                    processBuilder.redirectErrorStream(true); // Redirige la salida de error al flujo de entrada
+                    Process process = processBuilder.start();
+                    Pattern pattern = Pattern.compile("'(.*?)'");
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                        String output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+                        String[] lines = output.split("\\r?\\n");
+                        List<String> stringList = new ArrayList<>();
+                        //Results
+                        for (int i = 12; i < lines.length; i++) {
+                            stringList.add(lines[i]);
+                        }
+                        ResultsDAO resultsDAO = getResultsDAO(country, country, pattern, stringList);
+                        System.out.println(resultsDAO);
+                        resultRepository.save(resultsDAO);
+                    }
+
+                }
             }
             if(action.equals("fixtures")) {
                 if(ids==null) {
@@ -115,11 +145,12 @@ public class NpmStartService {
 
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+                System.out.println(output);
                 if (action != null && action.equals("results")) {
                     saveResultsIds(country, league, action, output);
                 }
                 if (action != null && action.equals("fixtures")) {
-                    saveFixtures(country, league, action, output, ids);
+                    saveFixturesIds(country, league, action, output, ids);
                 }
             }
             int exitCode = process.waitFor();
@@ -132,21 +163,63 @@ public class NpmStartService {
             return false;
         }
     }
-    private void saveFixtures(String country, String league, String action, String output, String ids) {
+
+    private void saveFixturesIds(String country, String league, String action, String output, String ids) {
+        // Dividir el output en líneas
+        Pattern pattern = Pattern.compile("'(.*?)'");
+
+        String[] lines = output.split("\\r?\\n");
+        System.out.println(output);
         System.out.println(country);
         System.out.println(league);
         System.out.println(action);
         System.out.println(output);
-
-        String[] lines = output.split("\\r?\\n");
-
+        // Filtrar y almacenar solo las líneas que comienzan con "g_3_" en un array
         // Filtrar las líneas que contienen "matchId" y realizar el split
         String[] filteredLines = Arrays.stream(lines)
                 .filter(line -> line.contains("matchId"))
                 .map(line -> extractContentWithinSingleQuotes(line))
                 .toArray(String[]::new);
+        List<String> idsPartidos = Arrays.stream(filteredLines).collect(Collectors.toList());
+        FixturesIdPKDAO fixturesPKDAO = new FixturesIdPKDAO();
+        fixturesPKDAO.setAction(action);
+        fixturesPKDAO.setLeague(league);
+        fixturesPKDAO.setCountry(country);
+        fixturesPKDAO.setDate(Instant.now());
+        FixturesIds fixturesDAO = new FixturesIds();
+        fixturesDAO.setIds(idsPartidos);
+        fixturesDAO.setFixturesIdPKDAO(fixturesPKDAO);
+        fixturesIdRepository.save(fixturesDAO);
+    }
 
+    private void saveResults(String country, String league, String action, String output, String ids) {
+        // Define a regular expression to match the content between single quotes
+        Pattern pattern = Pattern.compile("'(.*?)'");
+        System.out.println(country);
+        System.out.println(league);
+        System.out.println(action);
+        System.out.println(output);
+        String[] lines = output.split("\\r?\\n");
+        List<String> stringList = new ArrayList<>();
+        for (int i = 12; i < lines.length; i++) {
+            stringList.add(lines[i]);
+        }
 
+        ResultsDAO resultsDAO = getResultsDAO(country, league, pattern, stringList);
+        System.out.println(resultsDAO);
+    }
+
+    private void saveFixtures(String country, String league, String action, String output, String ids) {
+        System.out.println(country);
+        System.out.println(league);
+        System.out.println(action);
+        System.out.println(output);
+        String[] lines = output.split("\\r?\\n");
+        // Filtrar las líneas que contienen "matchId" y realizar el split
+        String[] filteredLines = Arrays.stream(lines)
+                .filter(line -> line.contains("matchId"))
+                .map(line -> extractContentWithinSingleQuotes(line))
+                .toArray(String[]::new);
         // Filtrar las líneas que contienen "eventTime" y realizar el split
         String[] filteredLines1 = Arrays.stream(lines)
                 .filter(line -> line.contains("eventTime"))
@@ -206,12 +279,13 @@ public class NpmStartService {
             Instant instant = modifiedDateTime.atZone(ZoneOffset.UTC).toInstant();
 
             System.out.println("Instant con segundos en 00: " + instant);
-
+            FixturesPKDAO fixturesPKDAO =  new FixturesPKDAO();
+            fixturesPKDAO.setMatchId(matchId);
             fixturesDAO.setEventTime(instant);
             fixturesDAO.setCountry(country);
             fixturesDAO.setLeague(league);
             fixturesDAO.setAction(action);
-            fixturesDAO.setMatchId(matchId);
+            fixturesDAO.setFixturesPKDAO(fixturesPKDAO);
             fixturesDAO.setHomeTeam(homeTeam);
             fixturesDAO.setAwayTeam(awayTeam);
             fixturesDAO.setHasExecuted(false);
@@ -236,9 +310,11 @@ public class NpmStartService {
                 .filter(line -> line.startsWith("g_3_"))
                 .toArray(String[]::new);
         ResultsIds resultsIds = new ResultsIds();
-        resultsIds.setCountry(country);
-        resultsIds.setLeague(league);
-        resultsIds.setAction(action);
+        ResultsIdPKDAO resultsIdPKDAO = new ResultsIdPKDAO();
+        resultsIdPKDAO.setCountry(country);
+        resultsIdPKDAO.setAction(action);
+        resultsIdPKDAO.setLeague(league);
+        resultsIds.setResultsIdPKDAO(resultsIdPKDAO);
         List<String> linesUrls = new ArrayList<>();
         // Ahora `filteredLines` contiene las líneas deseadas
         logger.info("country {}" , country);
@@ -404,12 +480,14 @@ public class NpmStartService {
         return uniqueUrls;
     }
 
+    @Async
     public void getFirstUrlWithBooleanFalse() {
         System.out.println("EVERY DAY");
         List<UrlsDAO> allurls = urlsRepository.findAll();
         List<UrlsDAO> urlsList = urlsRepository.findAllByIsOpenedFalse();
         for(UrlsDAO urls : urlsList){
-            if(!urls.isOpened()){
+            long conteoBarras = urls.getUrls().chars().filter(c -> c == '/').count();
+            if(!urls.isOpened() ){
                 List<String> stringsUrls = runNpmStartAndExtractUniqueUrls(urls.getUrls());
                 urls.getUrls();
                 urls.setOpened(true);

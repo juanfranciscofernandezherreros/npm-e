@@ -12,11 +12,9 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "RESULTS_IDS")
-public class ResultsIds {
+@Document(collection = "FIXTURES_IDS")
+public class FixturesIds {
     @Id
-    private ResultsIdPKDAO resultsIdPKDAO;
-    private Instant dateExecuted;
-    private String season;
+    private FixturesIdPKDAO fixturesIdPKDAO;
     private List<String> ids;
 }

@@ -1,8 +1,6 @@
 package com.fernandez.fixtures;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,12 +9,16 @@ import com.fernandez.fixtures.dao.urls.UrlsDAO;
 import com.fernandez.fixtures.dto.ResultsDTO;
 import com.fernandez.fixtures.dto.Root;
 import com.fernandez.fixtures.dto.UrlsDTO;
+import com.fernandez.fixtures.output.ResultsIdPKDAO;
 import com.fernandez.fixtures.output.ResultsIds;
 import com.fernandez.fixtures.repository.ResultsIdsRepository;
 import com.fernandez.fixtures.repository.ResultsRepository;
 import com.fernandez.fixtures.service.NpmStartService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,6 +41,7 @@ public class NpmController {
     private ResultsRepository resultRepository;
 
     @PostMapping("/start")
+    @Async
     public void startNpm(@RequestBody List<Root> roots) {
 
         List<CompletableFuture<Boolean>> futures = roots.stream()
@@ -67,12 +70,14 @@ public class NpmController {
         String action = resultsDTO.getAction();
 
         log.info("Fetching ResultsIds for country: {}, league: {}, action: {}", country, league, action);
-        ResultsIds resultsIds = resultsRepository.findByCountryAndLeagueAndAction(country, league, action);
-
+        ResultsIdPKDAO resultsIdPKDAO = new ResultsIdPKDAO();
+        resultsIdPKDAO.setLeague(league);
+        resultsIdPKDAO.setCountry(country);
+        resultsIdPKDAO.setAction(action);
+        Optional<ResultsIds> resultsIds = resultsRepository.findById(resultsIdPKDAO);
         log.info("Fetching ResultsDAOs for country: {}, league: {}", country, league);
         List<ResultsDAO> ids = resultRepository.findByCountryAndLeague(country, league);
-
-        List<String> idsNotInDatabase = new ArrayList<>(resultsIds.getIds());
+        List<String> idsNotInDatabase = new ArrayList<>(resultsIds.get().getIds());
         idsNotInDatabase.removeAll(ids.stream().map(ResultsDAO::getMatchId).collect(Collectors.toList()));
 
         log.info("Processing {} IDs not in the database", idsNotInDatabase.size());
@@ -89,9 +94,24 @@ public class NpmController {
     public void saveAllUrls(){
         npmStartService.getFirstUrlWithBooleanFalse();
     }
+    @GetMapping("/resultsId/{league}/{country}")
+    public ResponseEntity<?> resultsId(@PathVariable("league") String league,@PathVariable("country") String country){
+        try {
+            ResultsIdPKDAO resultsIdPKDAO = new ResultsIdPKDAO();
+            resultsIdPKDAO.setCountry(country);
+            resultsIdPKDAO.setLeague(league);
+            resultsIdPKDAO.setAction("results");
+            Optional<ResultsIds> resultsIds = resultsRepository.findById(resultsIdPKDAO);
+            return new ResponseEntity<>(resultsIds.get(), HttpStatus.OK);
+        } catch (MyEntityNotFoundException e) {
+            return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
 
 
 }
-
 
 

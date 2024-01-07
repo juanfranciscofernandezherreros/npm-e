@@ -1,23 +1,23 @@
-package com.fernandez.fixtures.dao;
+package com.fernandez.fixtures.dao.fixtures;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
-import java.util.Date;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "FIXTURES")
 public class FixturesDAO {
-
+    @Id
+    private FixturesPKDAO fixturesPKDAO;
     private String country;
     private String league;
     private String action;
-    private String matchId;
     private Instant eventTime;
     private String homeTeam;
     private String awayTeam;
