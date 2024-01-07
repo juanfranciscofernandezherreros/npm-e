@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.Instant;
 
@@ -14,13 +15,14 @@ import java.time.Instant;
 @Document(collection = "FIXTURES")
 public class FixturesDAO {
     @Id
-    private FixturesPKDAO fixturesPKDAO;
+    @Field("matchId")
+    private String matchId;
     private String country;
     private String league;
     private String action;
     private Instant eventTime;
     private String homeTeam;
     private String awayTeam;
-    private Boolean hasExecuted;
+    private boolean hasExecuted;
 
 }

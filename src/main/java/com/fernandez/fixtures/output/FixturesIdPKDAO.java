@@ -9,5 +9,4 @@ public class FixturesIdPKDAO {
     private String country;
     private String league;
     private String action;
-    private Instant date;
 }

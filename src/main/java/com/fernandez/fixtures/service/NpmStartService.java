@@ -1,6 +1,8 @@
 package com.fernandez.fixtures.service;
 
 import com.fernandez.fixtures.dao.fixtures.FixturesPKDAO;
+import com.fernandez.fixtures.dao.teams.TeamsDAO;
+import com.fernandez.fixtures.dao.teams.TeamsPKDAO;
 import com.fernandez.fixtures.dao.urls.UrlsDAO;
 import com.fernandez.fixtures.output.FixturesIdPKDAO;
 import com.fernandez.fixtures.output.FixturesIds;
@@ -28,7 +30,6 @@ import com.fernandez.fixtures.utils.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -54,6 +55,8 @@ public class NpmStartService {
     @Autowired
     private FixturesIdRepository fixturesIdRepository;
 
+    @Autowired
+    private TeamRepository teamRepository;
     private final Logger logger = LoggerFactory.getLogger(NpmStartService.class);
 
     public CompletableFuture<Boolean> runNpmStartAsync(String country, String league, String action, String ids, String optional) {
@@ -64,8 +67,8 @@ public class NpmStartService {
         String output1 = new String();
         try {
             if(action.equals("fixtures")) {
-                    command = String.format("npm run start country=%s league=%s action=%s ids=%s headless",
-                            country, league, action, ids);
+                    command = String.format("npm run start country=%s league=%s action=%s headless",
+                            country, league, action);
             }
 
             if(action.equals("results")) {
@@ -134,7 +137,7 @@ public class NpmStartService {
                 }
             }
 
-            logger.info("Running npm start with command: {}", command);
+            logger.info("Running npm start with command FIXTURES: {}", command);
 
             ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", command)
                     .directory(new File("C:\\Proyectos\\FlashscoreScraping"));
@@ -151,6 +154,7 @@ public class NpmStartService {
                 }
                 if (action != null && action.equals("fixtures")) {
                     saveFixturesIds(country, league, action, output, ids);
+                    saveFixtures(country, league,action,output,ids);
                 }
             }
             int exitCode = process.waitFor();
@@ -162,51 +166,6 @@ public class NpmStartService {
             logger.error("Error running npm start", e);
             return false;
         }
-    }
-
-    private void saveFixturesIds(String country, String league, String action, String output, String ids) {
-        // Dividir el output en líneas
-        Pattern pattern = Pattern.compile("'(.*?)'");
-
-        String[] lines = output.split("\\r?\\n");
-        System.out.println(output);
-        System.out.println(country);
-        System.out.println(league);
-        System.out.println(action);
-        System.out.println(output);
-        // Filtrar y almacenar solo las líneas que comienzan con "g_3_" en un array
-        // Filtrar las líneas que contienen "matchId" y realizar el split
-        String[] filteredLines = Arrays.stream(lines)
-                .filter(line -> line.contains("matchId"))
-                .map(line -> extractContentWithinSingleQuotes(line))
-                .toArray(String[]::new);
-        List<String> idsPartidos = Arrays.stream(filteredLines).collect(Collectors.toList());
-        FixturesIdPKDAO fixturesPKDAO = new FixturesIdPKDAO();
-        fixturesPKDAO.setAction(action);
-        fixturesPKDAO.setLeague(league);
-        fixturesPKDAO.setCountry(country);
-        fixturesPKDAO.setDate(Instant.now());
-        FixturesIds fixturesDAO = new FixturesIds();
-        fixturesDAO.setIds(idsPartidos);
-        fixturesDAO.setFixturesIdPKDAO(fixturesPKDAO);
-        fixturesIdRepository.save(fixturesDAO);
-    }
-
-    private void saveResults(String country, String league, String action, String output, String ids) {
-        // Define a regular expression to match the content between single quotes
-        Pattern pattern = Pattern.compile("'(.*?)'");
-        System.out.println(country);
-        System.out.println(league);
-        System.out.println(action);
-        System.out.println(output);
-        String[] lines = output.split("\\r?\\n");
-        List<String> stringList = new ArrayList<>();
-        for (int i = 12; i < lines.length; i++) {
-            stringList.add(lines[i]);
-        }
-
-        ResultsDAO resultsDAO = getResultsDAO(country, league, pattern, stringList);
-        System.out.println(resultsDAO);
     }
 
     private void saveFixtures(String country, String league, String action, String output, String ids) {
@@ -252,46 +211,73 @@ public class NpmStartService {
 
         for (int i = 0; i < length; i++) {
             FixturesDAO fixturesDAO = new FixturesDAO();
-            String matchId = filteredLines[i];
-            String match  = runNpmStartWithId(country,league, action, matchId,null);
-            String[] event = match.split("\\r?\\n");
+            //String matchId = filteredLines[i];
+            //String match  = runNpmStartWithId(country,league, action, matchId,null);
+            /*String[] event = match.split("\\r?\\n");
             for(String evt : event) {
                 if(evt.contains("fechasPartidos")){
                     match = evt.split("-")[1].replace("]","").trim();
                 }
-            }
+            }*/
             String homeTeam = filteredLines2[i];
             String awayTeam = filteredLines3[i];
 
             // Supongamos que la cadena de fecha y hora se almacena en una variable llamada 'eventTime'
-            String eventTime = match;
+            //String eventTime = match;
 
             // Define el formato de la cadena de fecha y hora
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+            //DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
             // Convierte la cadena a un objeto LocalDateTime
-            LocalDateTime localDateTime = LocalDateTime.parse(eventTime, formatter);
+            //LocalDateTime localDateTime = LocalDateTime.parse(eventTime, formatter);
 
             // Establece los segundos en "00" y conserva las horas y minutos originales
-            LocalDateTime modifiedDateTime = localDateTime.withSecond(0).withNano(0);
+            //LocalDateTime modifiedDateTime = localDateTime.withSecond(0).withNano(0);
 
             // Convierte el LocalDateTime a un objeto Instant
-            Instant instant = modifiedDateTime.atZone(ZoneOffset.UTC).toInstant();
+            //Instant instant = modifiedDateTime.atZone(ZoneOffset.UTC).toInstant();
 
-            System.out.println("Instant con segundos en 00: " + instant);
+            //System.out.println("Instant con segundos en 00: " + instant);
             FixturesPKDAO fixturesPKDAO =  new FixturesPKDAO();
-            fixturesPKDAO.setMatchId(matchId);
-            fixturesDAO.setEventTime(instant);
+            fixturesPKDAO.setMatchId(ids);
+            //fixturesDAO.setEventTime();
             fixturesDAO.setCountry(country);
             fixturesDAO.setLeague(league);
             fixturesDAO.setAction(action);
-            fixturesDAO.setFixturesPKDAO(fixturesPKDAO);
+            fixturesDAO.setMatchId(ids);
             fixturesDAO.setHomeTeam(homeTeam);
             fixturesDAO.setAwayTeam(awayTeam);
             fixturesDAO.setHasExecuted(false);
             fixturesRepository.save(fixturesDAO);
         }
 
+    }
+
+    private void saveFixturesIds(String country, String league, String action, String output, String ids) {
+        // Dividir el output en líneas
+        Pattern pattern = Pattern.compile("'(.*?)'");
+
+        String[] lines = output.split("\\r?\\n");
+        System.out.println(output);
+        System.out.println(country);
+        System.out.println(league);
+        System.out.println(action);
+        System.out.println(output);
+        // Filtrar y almacenar solo las líneas que comienzan con "g_3_" en un array
+        // Filtrar las líneas que contienen "matchId" y realizar el split
+        String[] filteredLines = Arrays.stream(lines)
+                .filter(line -> line.contains("matchId"))
+                .map(line -> extractContentWithinSingleQuotes(line))
+                .toArray(String[]::new);
+        List<String> idsPartidos = Arrays.stream(filteredLines).collect(Collectors.toList());
+        FixturesIdPKDAO fixturesPKDAO = new FixturesIdPKDAO();
+        fixturesPKDAO.setAction(action);
+        fixturesPKDAO.setLeague(league);
+        fixturesPKDAO.setCountry(country);
+        FixturesIds fixturesDAO = new FixturesIds();
+        fixturesDAO.setIds(idsPartidos);
+        fixturesDAO.setFixturesIdPKDAO(fixturesPKDAO);
+        FixturesIds fixturesIds = fixturesIdRepository.save(fixturesDAO);
     }
 
     // Método para extraer contenido dentro de comillas simples
@@ -516,5 +502,61 @@ public class NpmStartService {
 
     public List<UrlsDAO> findUrlsContainingString(String searchString) {
         return urlsRepository.findByUrlsRegex(searchString);
+    }
+
+    public void runNpmStartWithIdFixtures(String country, String league, String action, String id, Object o) throws IOException {
+        String command = String.format("npm run start country=%s league=%s action=%s ids=%s headless",
+                country, league, action, id);
+        ProcessBuilder processBuilder = new ProcessBuilder("cmd.exe", "/c", command)
+                .directory(new File("C:\\Proyectos\\FlashscoreScraping"));
+        processBuilder.redirectErrorStream(true); // Redirige la salida de error al flujo de entrada
+        Process process = processBuilder.start();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+            String[] lines = output.split("\\r?\\n");
+            List<String> stringList = new ArrayList<>();
+            //Results
+            for (int i = 0; i < lines.length; i++) {
+                stringList.add(lines[i]);
+            }
+                FixturesPKDAO fixturesPKDAO = new FixturesPKDAO();
+                fixturesPKDAO.setMatchId(id);
+                FixturesDAO fixturesDAO = new FixturesDAO();
+                fixturesDAO.setAction(action);
+                fixturesDAO.setCountry(country);
+                fixturesDAO.setLeague(league);
+                fixturesDAO.setMatchId(id);
+                fixturesDAO.setHomeTeam(stringList.get(14).split("-")[1].trim());
+                fixturesDAO.setAwayTeam(stringList.get(15).split("-")[1].trim());
+
+                String dateStr = stringList.get(13).split("-")[1].trim();
+
+                // Define el formato de la cadena de fecha y hora
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+
+                // Convierte la cadena a un objeto LocalDateTime
+                LocalDateTime localDateTime = LocalDateTime.parse(dateStr, formatter);
+
+                // Convierte el LocalDateTime a un objeto Instant
+                Instant instant = localDateTime.atZone(ZoneOffset.UTC).toInstant();
+                fixturesDAO.setEventTime(instant);
+                fixturesRepository.save(fixturesDAO);
+                TeamsPKDAO teamPKDAO = new TeamsPKDAO();
+                String teamH = stringList.get(16);
+                teamPKDAO.setTeamId(teamH.split("/")[3]);
+                TeamsDAO teamsDAO = new TeamsDAO();
+                teamsDAO.setCountry(country);
+                teamsDAO.setName(stringList.get(14).split("-")[1].trim());
+                TeamsPKDAO teamPKDAO1 = new TeamsPKDAO();
+                teamsDAO.setTeamPKDAO(teamPKDAO);
+                String teamA = stringList.get(17);
+                TeamsDAO teamsDAO1 = new TeamsDAO();
+                teamPKDAO1.setTeamId(teamA.split("/")[3]);
+                teamsDAO1.setTeamPKDAO(teamPKDAO1);
+                teamsDAO1.setCountry(country);
+                teamsDAO1.setName(stringList.get(15).split("-")[1].trim());
+                teamRepository.save(teamsDAO);
+                teamRepository.save(teamsDAO1);
+        }
     }
 }

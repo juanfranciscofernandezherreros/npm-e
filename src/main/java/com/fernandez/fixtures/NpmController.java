@@ -1,16 +1,23 @@
 package com.fernandez.fixtures;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fernandez.fixtures.dao.fixtures.FixturesDAO;
+import com.fernandez.fixtures.dao.fixtures.FixturesPKDAO;
 import com.fernandez.fixtures.dao.results.ResultsDAO;
 import com.fernandez.fixtures.dao.urls.UrlsDAO;
 import com.fernandez.fixtures.dto.ResultsDTO;
 import com.fernandez.fixtures.dto.Root;
 import com.fernandez.fixtures.dto.UrlsDTO;
+import com.fernandez.fixtures.output.FixturesIdPKDAO;
+import com.fernandez.fixtures.output.FixturesIds;
 import com.fernandez.fixtures.output.ResultsIdPKDAO;
 import com.fernandez.fixtures.output.ResultsIds;
+import com.fernandez.fixtures.repository.FixturesIdRepository;
+import com.fernandez.fixtures.repository.FixturesRepository;
 import com.fernandez.fixtures.repository.ResultsIdsRepository;
 import com.fernandez.fixtures.repository.ResultsRepository;
 import com.fernandez.fixtures.service.NpmStartService;
@@ -40,6 +47,12 @@ public class NpmController {
     @Autowired
     private ResultsRepository resultRepository;
 
+    @Autowired
+    private FixturesRepository fixturesRepository;
+
+    @Autowired
+    private FixturesIdRepository fixturesIdRepository;
+
     @PostMapping("/start")
     @Async
     public void startNpm(@RequestBody List<Root> roots) {
@@ -61,14 +74,38 @@ public class NpmController {
         allOf.join();
     }
 
-    @PostMapping("/strings")
-    public void processStrings(@RequestBody ResultsDTO resultsDTO) {
+    @PostMapping("/strings/fixtures")
+    @Async
+    public void processingFixtures(@RequestBody ResultsDTO resultsDTO) throws IOException {
         log.info("Received strings: {}", resultsDTO);
-
         String country = resultsDTO.getCountry();
         String league = resultsDTO.getLeague();
         String action = resultsDTO.getAction();
+        log.info("Fetching FixturesIds for country: {}, league: {}, action: {}", country, league, action);
+        FixturesIdPKDAO fixturesIdPKDAO = new FixturesIdPKDAO();
+        fixturesIdPKDAO.setLeague(league);
+        fixturesIdPKDAO.setCountry(country);
+        fixturesIdPKDAO.setAction(action);
+        Optional<FixturesIds> fixturesIds = fixturesIdRepository.findById(fixturesIdPKDAO);
+        log.info("Fetching FixturesDAOs for country: {}, league: {}", country, league);
+        List<FixturesDAO> ids = fixturesRepository.findByCountryAndLeague(country, league);
+        List<String> idsNotInDatabase = new ArrayList<>(fixturesIds.get().getIds());
+        idsNotInDatabase.removeAll(ids.stream().map(FixturesDAO::getMatchId).collect(Collectors.toList()));
+        log.info("Processing {} IDs not in the database", idsNotInDatabase.size());
+        for (String id : idsNotInDatabase) {
+            log.info("Processing ID: {}", id);
+            npmStartService.runNpmStartWithIdFixtures(country, league, action, id,null);
+            log.info("Processing completed for ID: {}", id);
+        }
+        log.info("Processing finished for all IDs");
+    }
 
+    @PostMapping("/strings/results")
+    public void processStrings(@RequestBody ResultsDTO resultsDTO) {
+        log.info("Received strings: {}", resultsDTO);
+        String country = resultsDTO.getCountry();
+        String league = resultsDTO.getLeague();
+        String action = resultsDTO.getAction();
         log.info("Fetching ResultsIds for country: {}, league: {}, action: {}", country, league, action);
         ResultsIdPKDAO resultsIdPKDAO = new ResultsIdPKDAO();
         resultsIdPKDAO.setLeague(league);
@@ -79,14 +116,12 @@ public class NpmController {
         List<ResultsDAO> ids = resultRepository.findByCountryAndLeague(country, league);
         List<String> idsNotInDatabase = new ArrayList<>(resultsIds.get().getIds());
         idsNotInDatabase.removeAll(ids.stream().map(ResultsDAO::getMatchId).collect(Collectors.toList()));
-
         log.info("Processing {} IDs not in the database", idsNotInDatabase.size());
         for (String id : idsNotInDatabase) {
             log.info("Processing ID: {}", id);
             npmStartService.runNpmStartWithIdResults(country, league, action, id);
             log.info("Processing completed for ID: {}", id);
         }
-
         log.info("Processing finished for all IDs");
     }
 
