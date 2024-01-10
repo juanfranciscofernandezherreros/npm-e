@@ -36,6 +36,8 @@ import org.springframework.stereotype.Service;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 @Service
 public class NpmStartService {
@@ -469,29 +471,43 @@ public class NpmStartService {
     @Async
     public void getFirstUrlWithBooleanFalse() {
         System.out.println("EVERY DAY");
-        List<UrlsDAO> allurls = urlsRepository.findAll();
         List<UrlsDAO> urlsList = urlsRepository.findAllByIsOpenedFalse();
-        for(UrlsDAO urls : urlsList){
-            long conteoBarras = urls.getUrls().chars().filter(c -> c == '/').count();
-            if(!urls.isOpened() ){
-                List<String> stringsUrls = runNpmStartAndExtractUniqueUrls(urls.getUrls());
-                urls.getUrls();
-                urls.setOpened(true);
-                urlsRepository.save(urls);
-                List<String> uniqueUrls = extractUniqueUrls(stringsUrls);
-                // Obtener las URLs que no están en el repository
-                List<UrlsDAO> urlsNotInRepository = uniqueUrls.stream()
-                        .filter(url -> allurls.stream().noneMatch(urlsDAO -> urlsDAO.getUrls().equals(url)))
-                        .map(url -> new UrlsDAO(url)) // Suponiendo que UrlsDAO tiene un constructor que acepta una URL
-                        .collect(Collectors.toList());
-
-                urlsNotInRepository.forEach(System.out::println);
-                urlsRepository.saveAll(urlsNotInRepository);
+        if(urlsList.size()==0){
+            return;
+        }
+        for (UrlsDAO urls : urlsList) {
+            logger.info("urls {}", urls);
+            if (!urls.isOpened()) {
+                processSingleUrl(urls,urlsList);
             }
         }
         getFirstUrlWithBooleanFalse();
-
     }
+
+    private void processSingleUrl(UrlsDAO urls , List<UrlsDAO> urlsDAOList) {
+        List<String> stringsUrls = runNpmStartAndExtractUniqueUrls(urls.getUrls());
+        // Combina las listas y elimina duplicados
+        List<String> stringList2 = Stream.concat(stringsUrls.stream(), urlsDAOList.stream().map(UrlsDAO::getUrls))
+                .distinct()
+                .collect(Collectors.toList());
+        List<UrlsDAO> urlsDAOList1 = stringList2.stream().map(x->new UrlsDAO(x)).collect(Collectors.toList());
+        List<UrlsDAO> urlsNotInRepository = urlsDAOList1.stream()
+                .filter(urlDAO -> !urlDAO.isOpened() &&
+                        (urlDAO.getUrls().contains("/results") || urlDAO.getUrls().contains("/fixtures") || urlDAO.getUrls().contains("/news") ||
+                                urlDAO.getUrls().contains("/draw") || urlDAO.getUrls().contains("/archive") || urlDAO.getUrls().contains("/standings")))
+                .peek(urlDAO -> urlDAO.setOpened(true))
+                .collect(Collectors.toList());
+        logger.info("urls {}",urlsNotInRepository.size());
+        urlsRepository.saveAll(urlsNotInRepository);
+        urls.setUrls(urls.getUrls());
+        urls.setOpened(true);
+        urlsRepository.save(urls);
+    }
+
+
+
+
+
 
     public static List<String> extractUniqueUrls(List<String> inputUrls) {
         Set<String> uniqueUrls = inputUrls.stream().collect(Collectors.toSet());

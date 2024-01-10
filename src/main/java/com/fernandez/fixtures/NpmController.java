@@ -92,10 +92,12 @@ public class NpmController {
         List<String> idsNotInDatabase = new ArrayList<>(fixturesIds.get().getIds());
         idsNotInDatabase.removeAll(ids.stream().map(FixturesDAO::getMatchId).collect(Collectors.toList()));
         log.info("Processing {} IDs not in the database", idsNotInDatabase.size());
-        for (String id : idsNotInDatabase) {
-            log.info("Processing ID: {}", id);
-            npmStartService.runNpmStartWithIdFixtures(country, league, action, id,null);
-            log.info("Processing completed for ID: {}", id);
+        if(idsNotInDatabase.size()>=0) {
+            for (String id : idsNotInDatabase) {
+                log.info("Processing ID: {}", id);
+                npmStartService.runNpmStartWithIdFixtures(country, league, action, id, null);
+                log.info("Processing completed for ID: {}", id);
+            }
         }
         log.info("Processing finished for all IDs");
     }
@@ -117,10 +119,12 @@ public class NpmController {
         List<String> idsNotInDatabase = new ArrayList<>(resultsIds.get().getIds());
         idsNotInDatabase.removeAll(ids.stream().map(ResultsDAO::getMatchId).collect(Collectors.toList()));
         log.info("Processing {} IDs not in the database", idsNotInDatabase.size());
-        for (String id : idsNotInDatabase) {
-            log.info("Processing ID: {}", id);
-            npmStartService.runNpmStartWithIdResults(country, league, action, id);
-            log.info("Processing completed for ID: {}", id);
+        if(idsNotInDatabase.size()>=0) {
+            for (String id : idsNotInDatabase) {
+                log.info("Processing ID: {}", id);
+                npmStartService.runNpmStartWithIdResults(country, league, action, id);
+                log.info("Processing completed for ID: {}", id);
+            }
         }
         log.info("Processing finished for all IDs");
     }

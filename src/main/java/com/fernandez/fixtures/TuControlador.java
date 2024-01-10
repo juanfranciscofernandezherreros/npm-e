@@ -41,7 +41,6 @@ public class TuControlador {
                 BasketballConfigDTO basketballConfigDTO = new BasketballConfigDTO();
                 basketballConfigDTO.setCountry(urlParts[4]);
                 basketballConfigDTO.setCompetition(urlParts[5]);
-                basketballConfigDTO.setSeasson("2022-2023");
                 basketballConfigDTOList.add(basketballConfigDTO);
             }
             System.out.println(basketballConfigDTOList);
@@ -71,28 +70,6 @@ public class TuControlador {
 
         return urlsDAOList;
     }
-
-    @GetMapping("/findUrlsContainingString/fixturesSave")
-    @Async
-    public List<UrlsDAO> fixturesSave() {
-        List<UrlsDAO> urlsDAOList = npmStartService.findUrlsContainingString("fixtures");
-        List<BasketballConfigDTO> basketballConfigDTOList = new ArrayList<>();
-        if (!urlsDAOList.isEmpty()) {
-            // Realizar el split de la URL
-            for (UrlsDAO urlsDAO : urlsDAOList) {
-                String[] urlParts = urlsDAO.getUrls().split("/");
-                ResultsDTO resultsDTO = new ResultsDTO();
-                resultsDTO.setCountry(urlParts[4]);
-                resultsDTO.setLeague(urlParts[5]);
-                resultsDTO.setAction("fixtures");
-                System.out.println(resultsDTO);
-                resultsApiService.sendBasketballConfigRequest(resultsDTO);
-            }
-        }
-
-        return urlsDAOList;
-    }
-
 
 
 }

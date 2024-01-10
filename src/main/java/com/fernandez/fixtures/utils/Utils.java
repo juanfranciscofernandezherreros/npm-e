@@ -1,5 +1,10 @@
 package com.fernandez.fixtures.utils;
 
+import com.fernandez.fixtures.dao.urls.UrlsDAO;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
 public class Utils {
 
     public static String extractUrl(String input) {
@@ -16,6 +21,12 @@ public class Utils {
             // Manejar el caso en el que el patrón no se encuentra en la cadena
             return null;
         }
+    }
+
+    public static List<UrlsDAO> convertToUrlsDAOList(List<String> strUrls) {
+        return strUrls.stream()
+                .map(UrlsDAO::new)
+                .collect(Collectors.toList());
     }
 }
 

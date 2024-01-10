@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 public class BasketballConfigDTO {
     private String country;
     private String competition;
-    private String seasson;
     private Boolean hasSummary;
     private Boolean hasPlayerStatics;
     private Boolean hasStats0;
