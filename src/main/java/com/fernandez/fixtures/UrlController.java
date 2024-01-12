@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 @RestController
@@ -25,7 +27,16 @@ public class UrlController {
 
     @GetMapping("/search")
     public List<UrlsDAO> searchByUrl(@RequestParam String regex) {
-        return urlService.findByUrlsRegex("/spain\\/acb-.*\\/results/");
+        List<UrlsDAO> urlsList = urlService.findByUrlsRegex(regex);
+        urlsList.sort(Comparator.comparingInt(url -> extractYearFromUrl(url.getUrls())));
+        Collections.reverse(urlsList);
+        return urlsList;
+    }
+
+    private int extractYearFromUrl(String url) {
+        // Puedes personalizar este método según el formato de tus URLs
+        String[] parts = url.split("-");
+        return Integer.parseInt(parts[parts.length - 2]);
     }
 
 }

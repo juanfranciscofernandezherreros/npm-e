@@ -11,4 +11,5 @@ public interface UrlsRepository extends MongoRepository<UrlsDAO, String> {
     List<UrlsDAO> findAllByIsOpenedFalse();
 
     List<UrlsDAO> findByUrlsRegex(String regex);
+
 }
